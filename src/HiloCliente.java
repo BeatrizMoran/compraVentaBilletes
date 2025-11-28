@@ -92,6 +92,17 @@ public class HiloCliente extends Thread {
         return cipher.doFinal(msg.getBytes());
     }
 
+    public static boolean login(){
+        //usuario, passwd cifrados
+        //devolver true o false
+        return false;
+    }
+
+    public static boolean registro(){
+        //TODO REGISTRAR Y DEVOLVER REEGISTRO EXITOSO
+        return true;
+    }
+
 
 
 }

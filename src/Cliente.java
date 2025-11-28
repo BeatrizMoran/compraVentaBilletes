@@ -49,6 +49,19 @@ public class Cliente {
                 out.writeInt(opc);
                 out.flush();
 
+                if(!logueado){
+                    if(opc==3 || opc == 4){
+                        System.err.println("Tienes que estar logueado");
+                        continue;
+                    }
+                }
+
+                if(opc == 1 || opc == 2){
+                    if(logueado){
+                        System.err.println("Ya estas logueado");
+                        continue;
+                    }
+                }
 
                 System.out.println("Opcion seleccionada: " + opc);
 
@@ -61,22 +74,15 @@ public class Cliente {
                         login();
                         break;
                     case 3:
-                        if(logueado){
 
-                        }else{
-                            System.err.println("Tienes que estar logueado");
-                        }
                         break;
                     case 4:
-                        if(logueado){
                             Billete[] billetes = (Billete[]) in.readObject();
                             System.out.println("******* Lista de billetes: *******");
                             for(Billete b : billetes){
                                 System.out.println(b.toString());
                             }
-                        }else{
-                            System.err.println("Tienes que estar logueado");
-                        }
+
                         break;
                     case 5:
                         System.out.println("saliendo del programa");
@@ -144,6 +150,7 @@ public class Cliente {
                     System.err.println(error);
                 }
             } else {
+                 //TODO mandar datos usuario al servidor cifrados
                 Usuario u = new Usuario(nombre, apellido, edad, email, usuario, contrasenaHasheada);
                 System.out.println("Usuario registrado correctamente: " + u);
                 usuarios.put(usuario, u);
