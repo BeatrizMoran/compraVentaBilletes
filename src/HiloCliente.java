@@ -1,18 +1,25 @@
+import models.Usuario;
+
 import javax.crypto.Cipher;
+import java.io.DataInputStream;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.net.Socket;
 import java.security.*;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Scanner;
+import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class HiloCliente extends Thread {
     private Socket cliente;
-
+    public static Billete[] billetes = {
+            new Billete("Madrid", "Barcelona", 45.50, 12),
+            new Billete("Sevilla", "Madrid", 38.00, 8),
+            new Billete("Valencia", "Bilbao", 50.25, 5),
+            new Billete("Zaragoza", "Málaga", 32.10, 10),
+            new Billete("Madrid", "Lisboa", 80.00, 7)
+    };
 
     public HiloCliente(Socket cliente) {
         this.cliente = cliente;
@@ -35,26 +42,23 @@ public class HiloCliente extends Thread {
             salida.writeObject(publica);
             PublicKey publicaUsuario = (PublicKey) entrada.readObject();
 
+                while(true){
+                    int opcion = entrada.readInt();
 
-
-            int opc = -1;
-
-            while(opc != 5){
-                byte[] opcion = (byte[]) entrada.readObject();
-                System.out.println("Opcion seleccionada: " + new String(opcion));
-                opc = Integer.parseInt(descifrar(opcion, privada));
-
-                switch(opc){
-                    case 1:
-                        registrarse();
-                        break;
-                    case 5:
-                        System.out.println("saliendo del programa");
-                        System.exit(0);
-                        break;
+                    switch(opcion){
+                        case 3:
+                            break;
+                        case 4:
+                            salida.writeObject(billetes);
+                            break;
+                    }
                 }
-            }
-            cliente.close();
+
+
+
+
+
+            //cliente.close();
         }catch (IOException e) {
             throw new RuntimeException(e);
         } catch (NoSuchAlgorithmException e) {
@@ -70,48 +74,11 @@ public class HiloCliente extends Thread {
 
     }
 
-    public void registrarse(){
-        List<String> errores = new ArrayList<>();
-
-        Scanner sc = new Scanner(System.in);
-        System.out.println("Registrando usuario...");
-        System.out.println("Nombre");
-        String nombre = sc.nextLine();
-        System.out.println("Apellido");
-        String apellido = sc.nextLine();
-        System.out.println("edad");
-        if(!sc.hasNextInt()){
-            errores.add("Edad incorrecta, ingrese una edad valida");
-        }
-        int edad = sc.nextInt();
-        System.out.println("Email");
-        String email = sc.nextLine();
-        Pattern pat = Pattern.compile(".+@.+\\..+");
-        if(!validarPatron(pat, email)){
-            errores.add("email incorrecto, ingrese un email valido");
-        }
-
-        System.out.println("Usuario:");
-        String usuario = sc.nextLine();
-        if(!validarPatron(Pattern.compile("^[a-zA-Z]{6}"), usuario)){
-            errores.add("usuario incorrecto, minimo 6 caracteres");
-
-        }
-
-        System.out.println("Contraseña:");
-        String passwd = sc.nextLine();
-        if(!validarPatron(Pattern.compile("[a-zA-Z0-9]{8,}"), passwd)){
-            errores.add("Contraseña incorrecta, minimo 8 caracteres");
-        }
-
-        if(!errores.isEmpty()){
-            for(Object error: errores){
-                System.err.println(error);
-            }
-        }
-
+    public static void listarBilletes(){
 
     }
+
+
 
     public static String descifrar(byte[] msg, PrivateKey clave) throws Exception {
         Cipher cipher = Cipher.getInstance("RSA");
@@ -125,9 +92,6 @@ public class HiloCliente extends Thread {
         return cipher.doFinal(msg.getBytes());
     }
 
-    public static boolean validarPatron(Pattern patron, String valor){
-        Matcher mat = patron.matcher(valor);
-        return mat.find();
-    }
+
 
 }

@@ -1,36 +1,212 @@
+import models.Usuario;
+
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.util.Scanner;
+import java.security.*;
+import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public class Cliente {
+    private static Map<String, Usuario> usuarios = new HashMap<>();
+    private static boolean logueado = false;
+
     public static void main(String[] args) {
+
+
+
         Scanner sc = new Scanner(System.in);
         try {
             String menu = "1.Registro\n2.Iniciar sesion\n3.Comprar billetes\n4.Consultar billetes\n5.Salir";
             Socket cliente = new Socket("localhost", 5555);
 
-            DataOutputStream salida = new DataOutputStream(cliente.getOutputStream());
             ObjectOutputStream out = new ObjectOutputStream(cliente.getOutputStream());
             ObjectInputStream in = new ObjectInputStream(cliente.getInputStream());
 
+            //generamos las claves del cliente
+            KeyPairGenerator clavecliente = KeyPairGenerator.getInstance("RSA");
+
+            System.out.println("Generando par de claves");
+            KeyPair par = clavecliente.generateKeyPair();
+            PrivateKey privada=par.getPrivate();
+            PublicKey publica=par.getPublic();
+            //mandamos la clave del cliente al servidor
+            out.writeObject(publica);
+
+            //clave publica server
+            PublicKey publicaServidor = (PublicKey) in.readObject();
+
+
             int opc = -1;
-            System.out.println(menu + "\n  - Ingrese una opcion:");
 
             while(opc != 5){
+                System.out.println(menu + "\n  - Ingrese una opcion:");
                 opc = sc.nextInt();
-                salida.writeInt(opc);
+                out.writeInt(opc);
+                out.flush();
+
+
+                System.out.println("Opcion seleccionada: " + opc);
+
+
+                switch(opc){
+                    case 1:
+                        registrarse();
+                        break;
+                    case 2:
+                        login();
+                        break;
+                    case 3:
+                        if(logueado){
+
+                        }else{
+                            System.err.println("Tienes que estar logueado");
+                        }
+                        break;
+                    case 4:
+                        if(logueado){
+                            Billete[] billetes = (Billete[]) in.readObject();
+                            System.out.println("******* Lista de billetes: *******");
+                            for(Billete b : billetes){
+                                System.out.println(b.toString());
+                            }
+                        }else{
+                            System.err.println("Tienes que estar logueado");
+                        }
+                        break;
+                    case 5:
+                        System.out.println("saliendo del programa");
+                        System.exit(0);
+                        break;
+                }
             }
 
         } catch (IOException e) {
             throw new RuntimeException(e);
+        } catch (NoSuchAlgorithmException e) {
+            throw new RuntimeException(e);
+        } catch (ClassNotFoundException e) {
+            throw new RuntimeException(e);
         }
+
+
     }
 
+    public static void registrarse(){
+        try {
 
+
+            List<String> errores = new ArrayList<>();
+
+            Scanner sc = new Scanner(System.in);
+            System.out.println("Registrando usuario...");
+            System.out.println("Nombre");
+            String nombre = sc.nextLine();
+            System.out.println("Apellido");
+            String apellido = sc.nextLine();
+            System.out.println("edad");
+            int edad = 0;
+            if (!sc.hasNextInt()) {
+                errores.add("Edad incorrecta, ingrese una edad valida");
+            } else {
+                edad = sc.nextInt();
+
+            }
+            sc.nextLine();
+            System.out.println("Email");
+            String email = sc.nextLine();
+            Pattern pat = Pattern.compile(".+@.+\\..+");
+            if (!validarPatron(pat, email)) {
+                errores.add("email incorrecto, ingrese un email valido");
+            }
+
+            System.out.println("Usuario:");
+            String usuario = sc.nextLine();
+            if (!validarPatron(Pattern.compile("^[a-zA-Z0-9]{6}"), usuario)) {
+                errores.add("usuario incorrecto, minimo 6 caracteres");
+
+            }
+
+            System.out.println("Contraseña:");
+            String passwd = sc.nextLine();
+            if (!validarPatron(Pattern.compile("[a-zA-Z0-9]{8,}"), passwd)) {
+                errores.add("Contraseña incorrecta, minimo 8 caracteres");
+            }
+            String contrasenaHasheada = hashContrasena(passwd);
+
+
+            if (!errores.isEmpty()) {
+                for (Object error : errores) {
+                    System.err.println(error);
+                }
+            } else {
+                Usuario u = new Usuario(nombre, apellido, edad, email, usuario, contrasenaHasheada);
+                System.out.println("Usuario registrado correctamente: " + u);
+                usuarios.put(usuario, u);
+            }
+        } catch (NoSuchAlgorithmException e) {
+            throw new RuntimeException(e);
+        }
+
+    }
+
+    public static boolean validarPatron(Pattern patron, String valor){
+        Matcher mat = patron.matcher(valor);
+        return mat.find();
+    }
+
+    public static void login(){
+        Scanner sc = new Scanner(System.in);
+        System.out.println("Iniciando login...");
+        System.out.println("Usuario:");
+        String usuario = sc.nextLine();
+        System.out.println("Contraseña:");
+        String passwd = sc.nextLine();
+
+        if (usuarios.containsKey(usuario)) {
+            try {
+                System.out.println("Usuario existente");
+                Usuario u = usuarios.get(usuario);
+
+                // Hasheamos la contraseña ingresada y la comparamos con la almacenada
+                String contrasenaHasheada = hashContrasena(passwd);
+                //Accedemos a la informacion almacenada de ese usuario, es decir, el resumen de la contraseña
+                System.out.println(usuarios.get(usuario));
+                boolean passwdCorrecta =  contrasenaHasheada.equals(u.getPasswd());
+
+                if (passwdCorrecta) {
+                    System.out.println("Login correctamente");
+                    logueado = true;
+                } else {
+                    System.err.println("Login incorrecto");
+                    logueado = false;
+                }
+            } catch (NoSuchAlgorithmException e) {
+                throw new RuntimeException(e);
+            }
+
+        }else{
+            System.err.println("Usuario no encontrado, ingrese un usuario valido");
+        }
+
+
+    }
+
+    public static String hashContrasena(String contrasena) throws NoSuchAlgorithmException {
+        MessageDigest md = MessageDigest.getInstance("SHA-256");
+        byte[] hashBytes = md.digest(contrasena.getBytes());
+
+        // Convertir el hash a una cadena hexadecimal
+        StringBuilder sb = new StringBuilder();
+        for (byte b : hashBytes) {
+            sb.append(String.format("%02x", b));//convierte a hexadecimal en minuscula y con dos posiciones, 0 a la izquierda
+        }
+        return sb.toString();
+    }
 
 
 
