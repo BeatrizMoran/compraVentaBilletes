@@ -12,7 +12,7 @@ public class HiloCliente extends Thread {
     private static ObjectOutputStream salida;
     private static ObjectInputStream entrada;
     private static DataOutputStream dos;
-    //private static ObjectInputStream entradaSalida;
+    private static DataInputStream din;
     private static Map<String, Usuario> usuarios = new HashMap<>();
 
 
@@ -42,6 +42,7 @@ public class HiloCliente extends Thread {
             salida = new ObjectOutputStream(cliente.getOutputStream());
             entrada = new ObjectInputStream(cliente.getInputStream());
             dos = new DataOutputStream(cliente.getOutputStream());
+            din =  new DataInputStream(cliente.getInputStream());
 
             //intercambiar claves
             salida.writeObject(publica);
@@ -53,6 +54,9 @@ public class HiloCliente extends Thread {
                     switch(opcion){
                         case 1:
                             registro();
+                            break;
+                        case 2:
+                            login();
                             break;
                         case 3:
                             break;
@@ -96,7 +100,31 @@ public class HiloCliente extends Thread {
     }
 
     public static boolean login(){
+        try {
+            String usuario = din.readUTF();
+            String contrasenaHasheada = din.readUTF();
 
+            if (usuarios.containsKey(usuario)) {
+                    System.out.println("Usuario existente");
+                    Usuario u = usuarios.get(usuario);
+
+                    System.out.println("usuario encontrado: " + u.getNombre());
+                    boolean passwdCorrecta =  contrasenaHasheada.equals(u.getPasswd());
+
+                    if (passwdCorrecta) {
+                        System.out.println("Login correctamente");
+                        dos.writeUTF("200");
+                    } else {
+                        System.err.println("Login incorrecto");
+                        dos.writeUTF("500");
+                    }
+
+            }else{
+                System.err.println("Usuario no encontrado, ingrese un usuario valido");
+            }
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
         return false;
     }
 
@@ -110,12 +138,6 @@ public class HiloCliente extends Thread {
                 usuarios.put(u.getUsuario(), u);
                 dos.writeUTF("200");
             }
-
-
-
-
-
-
 
         } catch (IOException e) {
             throw new RuntimeException(e);

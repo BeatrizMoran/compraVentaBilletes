@@ -19,6 +19,7 @@ public class Cliente {
     private static ObjectOutputStream out;
     private static ObjectInputStream in;
     private static DataInputStream din;
+    private static DataOutputStream dout;
 
     public static void main(String[] args) {
 
@@ -30,7 +31,7 @@ public class Cliente {
             out = new ObjectOutputStream(cliente.getOutputStream());
             in = new ObjectInputStream(cliente.getInputStream());
             din = new DataInputStream(cliente.getInputStream());
-
+            dout = new DataOutputStream(cliente.getOutputStream());
             //generamos las claves del cliente
             KeyPairGenerator clavecliente = KeyPairGenerator.getInstance("RSA");
 
@@ -182,38 +183,38 @@ public class Cliente {
     }
 
     public static void login(){
-        Scanner sc = new Scanner(System.in);
+        try {
+            Scanner sc = new Scanner(System.in);
         System.out.println("Iniciando login...");
         System.out.println("Usuario:");
         String usuario = sc.nextLine();
         System.out.println("Contraseña:");
         String passwd = sc.nextLine();
 
-        if (usuarios.containsKey(usuario)) {
-            try {
-                System.out.println("Usuario existente");
-                Usuario u = usuarios.get(usuario);
+        // Hasheamos la contraseña ingresada y la comparamos con la almacenada
+            String contrasenaHasheada = hashContrasena(passwd);
+            dout.writeUTF(usuario);
+            dout.writeUTF(contrasenaHasheada);
 
-                // Hasheamos la contraseña ingresada y la comparamos con la almacenada
-                String contrasenaHasheada = hashContrasena(passwd);
-                //Accedemos a la informacion almacenada de ese usuario, es decir, el resumen de la contraseña
-                System.out.println(usuarios.get(usuario));
-                boolean passwdCorrecta =  contrasenaHasheada.equals(u.getPasswd());
+            //leer respuesta
+            String respuesta = din.readUTF();
 
-                if (passwdCorrecta) {
-                    System.out.println("Login correctamente");
-                    logueado = true;
-                } else {
-                    System.err.println("Login incorrecto");
-                    logueado = false;
-                }
-            } catch (NoSuchAlgorithmException e) {
-                throw new RuntimeException(e);
+            if(respuesta.equals("200")){
+                System.out.println("Login exitoso");
+                logueado = true;
+            }else{
+                System.err.println("Error, login incorrecto");
+                logueado = false;
             }
 
-        }else{
-            System.err.println("Usuario no encontrado, ingrese un usuario valido");
+
+        } catch (NoSuchAlgorithmException e) {
+            throw new RuntimeException(e);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
         }
+
+
 
 
     }
