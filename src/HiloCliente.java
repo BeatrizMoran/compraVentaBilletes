@@ -5,14 +5,11 @@ import java.io.*;
 import java.net.Socket;
 import java.security.*;
 import java.util.*;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 public class HiloCliente extends Thread {
-    private static ObjectOutputStream salida;
-    private static ObjectInputStream entrada;
-    private static DataOutputStream dos;
-    private static DataInputStream din;
+    private  ObjectOutputStream salida;
+    private ObjectInputStream entrada;
+
     private static Map<String, Usuario> usuarios = new HashMap<>();
 
 
@@ -41,12 +38,12 @@ public class HiloCliente extends Thread {
 
             salida = new ObjectOutputStream(cliente.getOutputStream());
             entrada = new ObjectInputStream(cliente.getInputStream());
-            dos = new DataOutputStream(cliente.getOutputStream());
-            din =  new DataInputStream(cliente.getInputStream());
+
 
             //intercambiar claves
-            salida.writeObject(publica);
             PublicKey publicaUsuario = (PublicKey) entrada.readObject();
+            salida.writeObject(publica);
+            salida.flush();
 
                 while(true){
                     int opcion = entrada.readInt();
@@ -62,6 +59,7 @@ public class HiloCliente extends Thread {
                             break;
                         case 4:
                             salida.writeObject(billetes);
+                            salida.flush();
                             break;
                     }
                 }
@@ -99,10 +97,10 @@ public class HiloCliente extends Thread {
         return cipher.doFinal(msg.getBytes());
     }
 
-    public static boolean login(){
+    public void login(){
         try {
-            String usuario = din.readUTF();
-            String contrasenaHasheada = din.readUTF();
+            String usuario = entrada.readUTF();
+            String contrasenaHasheada = entrada.readUTF();
 
             if (usuarios.containsKey(usuario)) {
                     System.out.println("Usuario existente");
@@ -113,30 +111,38 @@ public class HiloCliente extends Thread {
 
                     if (passwdCorrecta) {
                         System.out.println("Login correctamente");
-                        dos.writeUTF("200");
+                        salida.writeUTF("200");
+                        salida.flush();
+
                     } else {
                         System.err.println("Login incorrecto");
-                        dos.writeUTF("500");
+                        salida.writeUTF("500");
+                        salida.flush();
                     }
 
             }else{
                 System.err.println("Usuario no encontrado, ingrese un usuario valido");
+                salida.writeUTF("400");
+                salida.flush();
             }
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
-        return false;
     }
 
-    public static void registro(){
+    public void registro(){
         try {
             Usuario u = (Usuario) entrada.readObject();
 
             if (usuarios.containsKey(u.getUsuario())) {
-                dos.writeUTF("500");
+                salida.writeUTF("500");
+                salida.flush();
+
             }else{
                 usuarios.put(u.getUsuario(), u);
-                dos.writeUTF("200");
+                salida.writeUTF("200");
+                salida.flush();
+
             }
 
         } catch (IOException e) {

@@ -18,8 +18,7 @@ public class Cliente {
     private static PublicKey publicaServidor;
     private static ObjectOutputStream out;
     private static ObjectInputStream in;
-    private static DataInputStream din;
-    private static DataOutputStream dout;
+
 
     public static void main(String[] args) {
 
@@ -30,8 +29,7 @@ public class Cliente {
 
             out = new ObjectOutputStream(cliente.getOutputStream());
             in = new ObjectInputStream(cliente.getInputStream());
-            din = new DataInputStream(cliente.getInputStream());
-            dout = new DataOutputStream(cliente.getOutputStream());
+
             //generamos las claves del cliente
             KeyPairGenerator clavecliente = KeyPairGenerator.getInstance("RSA");
 
@@ -41,6 +39,8 @@ public class Cliente {
             PublicKey publica=par.getPublic();
             //mandamos la clave del cliente al servidor
             out.writeObject(publica);
+            out.flush();
+
 
             //clave publica server
             publicaServidor = (PublicKey) in.readObject();
@@ -50,9 +50,17 @@ public class Cliente {
 
             while(opc != 5){
                 System.out.println(menu + "\n  - Ingrese una opcion:");
+                if (!sc.hasNextInt()) {
+                    System.err.println("Introduce un numero entero");
+                    sc.nextLine();
+                    continue;
+                }
                 opc = sc.nextInt();
+                sc.nextLine();
+
                 out.writeInt(opc);
                 out.flush();
+
 
                 if(!logueado){
                     if(opc==3 || opc == 4){
@@ -92,6 +100,8 @@ public class Cliente {
                         System.out.println("saliendo del programa");
                         System.exit(0);
                         break;
+                    default:
+                        System.err.println("Opcion incorrecta");
                 }
             }
 
@@ -159,8 +169,9 @@ public class Cliente {
                 out.writeObject(u);
                 out.flush();
 
+
                 System.out.println("Datos enviados cifrados correctamente.");
-                String respuesta = din.readUTF();
+                String respuesta = in.readUTF();
                 if(respuesta.equals("200")){
                     System.out.println("Usuario registrado correctamente: " + u);
                 }else{
@@ -193,16 +204,23 @@ public class Cliente {
 
         // Hasheamos la contraseña ingresada y la comparamos con la almacenada
             String contrasenaHasheada = hashContrasena(passwd);
-            dout.writeUTF(usuario);
-            dout.writeUTF(contrasenaHasheada);
+            out.writeUTF(usuario);
+
+            out.writeUTF(contrasenaHasheada);
+            out.flush();
+
 
             //leer respuesta
-            String respuesta = din.readUTF();
+            String respuesta = in.readUTF();
 
             if(respuesta.equals("200")){
                 System.out.println("Login exitoso");
                 logueado = true;
-            }else{
+            }else if(respuesta.equals("400")){
+                System.out.println("Usuario no existente");
+                logueado = false;
+            }
+            else{
                 System.err.println("Error, login incorrecto");
                 logueado = false;
             }
