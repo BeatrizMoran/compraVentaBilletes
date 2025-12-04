@@ -1,9 +1,10 @@
 import models.Usuario;
 
-import java.io.DataOutputStream;
-import java.io.IOException;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
+import javax.crypto.BadPaddingException;
+import javax.crypto.Cipher;
+import javax.crypto.IllegalBlockSizeException;
+import javax.crypto.NoSuchPaddingException;
+import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.security.*;
@@ -14,18 +15,21 @@ import java.util.regex.Pattern;
 public class Cliente {
     private static Map<String, Usuario> usuarios = new HashMap<>();
     private static boolean logueado = false;
+    private static PublicKey publicaServidor;
+    private static ObjectOutputStream out;
+    private static ObjectInputStream in;
+    private static DataInputStream din;
 
     public static void main(String[] args) {
-
-
 
         Scanner sc = new Scanner(System.in);
         try {
             String menu = "1.Registro\n2.Iniciar sesion\n3.Comprar billetes\n4.Consultar billetes\n5.Salir";
             Socket cliente = new Socket("localhost", 5555);
 
-            ObjectOutputStream out = new ObjectOutputStream(cliente.getOutputStream());
-            ObjectInputStream in = new ObjectInputStream(cliente.getInputStream());
+            out = new ObjectOutputStream(cliente.getOutputStream());
+            in = new ObjectInputStream(cliente.getInputStream());
+            din = new DataInputStream(cliente.getInputStream());
 
             //generamos las claves del cliente
             KeyPairGenerator clavecliente = KeyPairGenerator.getInstance("RSA");
@@ -38,7 +42,7 @@ public class Cliente {
             out.writeObject(publica);
 
             //clave publica server
-            PublicKey publicaServidor = (PublicKey) in.readObject();
+            publicaServidor = (PublicKey) in.readObject();
 
 
             int opc = -1;
@@ -74,7 +78,6 @@ public class Cliente {
                         login();
                         break;
                     case 3:
-
                         break;
                     case 4:
                             Billete[] billetes = (Billete[]) in.readObject();
@@ -99,12 +102,10 @@ public class Cliente {
             throw new RuntimeException(e);
         }
 
-
     }
 
     public static void registrarse(){
         try {
-
 
             List<String> errores = new ArrayList<>();
 
@@ -150,12 +151,26 @@ public class Cliente {
                     System.err.println(error);
                 }
             } else {
-                 //TODO mandar datos usuario al servidor cifrados
+
                 Usuario u = new Usuario(nombre, apellido, edad, email, usuario, contrasenaHasheada);
-                System.out.println("Usuario registrado correctamente: " + u);
-                usuarios.put(usuario, u);
+
+
+                out.writeObject(u);
+                out.flush();
+
+                System.out.println("Datos enviados cifrados correctamente.");
+                String respuesta = din.readUTF();
+                if(respuesta.equals("200")){
+                    System.out.println("Usuario registrado correctamente: " + u);
+                }else{
+                    System.err.println("Error resgistrando usuario.- Usuario ya existente");
+
+                }
+
             }
         } catch (NoSuchAlgorithmException e) {
+            throw new RuntimeException(e);
+        } catch (IOException e) {
             throw new RuntimeException(e);
         }
 

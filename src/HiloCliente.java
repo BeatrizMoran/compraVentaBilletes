@@ -1,10 +1,7 @@
 import models.Usuario;
 
 import javax.crypto.Cipher;
-import java.io.DataInputStream;
-import java.io.IOException;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
+import java.io.*;
 import java.net.Socket;
 import java.security.*;
 import java.util.*;
@@ -12,6 +9,13 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class HiloCliente extends Thread {
+    private static ObjectOutputStream salida;
+    private static ObjectInputStream entrada;
+    private static DataOutputStream dos;
+    //private static ObjectInputStream entradaSalida;
+    private static Map<String, Usuario> usuarios = new HashMap<>();
+
+
     private Socket cliente;
     public static Billete[] billetes = {
             new Billete("Madrid", "Barcelona", 45.50, 12),
@@ -35,8 +39,9 @@ public class HiloCliente extends Thread {
             PrivateKey privada  = keys.getPrivate();
             PublicKey publica  = keys.getPublic();
 
-            ObjectOutputStream salida = new ObjectOutputStream(cliente.getOutputStream());
-            ObjectInputStream entrada = new ObjectInputStream(cliente.getInputStream());
+            salida = new ObjectOutputStream(cliente.getOutputStream());
+            entrada = new ObjectInputStream(cliente.getInputStream());
+            dos = new DataOutputStream(cliente.getOutputStream());
 
             //intercambiar claves
             salida.writeObject(publica);
@@ -46,6 +51,9 @@ public class HiloCliente extends Thread {
                     int opcion = entrada.readInt();
 
                     switch(opcion){
+                        case 1:
+                            registro();
+                            break;
                         case 3:
                             break;
                         case 4:
@@ -53,11 +61,6 @@ public class HiloCliente extends Thread {
                             break;
                     }
                 }
-
-
-
-
-
             //cliente.close();
         }catch (IOException e) {
             throw new RuntimeException(e);
@@ -93,14 +96,32 @@ public class HiloCliente extends Thread {
     }
 
     public static boolean login(){
-        //usuario, passwd cifrados
-        //devolver true o false
+
         return false;
     }
 
-    public static boolean registro(){
-        //TODO REGISTRAR Y DEVOLVER REEGISTRO EXITOSO
-        return true;
+    public static void registro(){
+        try {
+            Usuario u = (Usuario) entrada.readObject();
+
+            if (usuarios.containsKey(u.getUsuario())) {
+                dos.writeUTF("500");
+            }else{
+                usuarios.put(u.getUsuario(), u);
+                dos.writeUTF("200");
+            }
+
+
+
+
+
+
+
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        } catch (ClassNotFoundException e) {
+            throw new RuntimeException(e);
+        }
     }
 
 
