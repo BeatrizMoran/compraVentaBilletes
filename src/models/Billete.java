@@ -1,3 +1,5 @@
+package models;
+
 import java.io.Serializable;
 
 public class Billete implements Serializable {
@@ -36,7 +38,7 @@ public class Billete implements Serializable {
 
     @Override
     public String toString() {
-        return "Billete{" +
+        return "models.Billete{" +
                 "origen='" + origen + '\'' +
                 ", destino='" + destino + '\'' +
                 ", precio=" + precio +

@@ -1,4 +1,7 @@
+import models.Billete;
 import models.Usuario;
+import models.Transaccion;
+
 
 import javax.crypto.Cipher;
 import java.io.*;
@@ -56,6 +59,10 @@ public class HiloCliente extends Thread {
                             login();
                             break;
                         case 3:
+                            //mandar billetes
+                            salida.writeObject(billetes);
+                            salida.flush();
+                            comprarBilletes(publicaUsuario);
                             break;
                         case 4:
                             salida.writeObject(billetes);
@@ -75,9 +82,59 @@ public class HiloCliente extends Thread {
         }
     }
 
-    public synchronized void comprarBilletes(){
+    public synchronized void comprarBilletes(PublicKey publicaUsuario) {
+        try {
+            // 1. Recibir objeto y firma
+            Billete billeteRecibido = (Billete) entrada.readObject();
+            byte[] firmaCliente = (byte[]) entrada.readObject();
 
+            // 2. Convertir a bytes para verificar firma
+            ByteArrayOutputStream bos = new ByteArrayOutputStream();
+            ObjectOutputStream oos = new ObjectOutputStream(bos);
+            oos.writeObject(billeteRecibido);
+            oos.flush();
+            byte[] mensajeBytes = bos.toByteArray();
+
+            Signature sig = Signature.getInstance("SHA256withRSA");
+            sig.initVerify(publicaUsuario);
+            sig.update(mensajeBytes);
+            boolean valida = sig.verify(firmaCliente);
+
+            // 3. Crear transacción
+            Transaccion transaccion = new Transaccion(billeteRecibido);
+
+            if (valida) {
+                transaccion.setEstado("EXITOSA");
+                System.out.println("Compra verificada correctamente: " + billeteRecibido);
+                // Buscar el billete original en el servidor
+                for (Billete b : billetes) {
+                    if (b.equals(billeteRecibido)) {
+                        if (b.getPlazasDisponibles() > 0) {
+                            b.setPlazasDisponibles(b.getPlazasDisponibles() - 1);
+                            transaccion.setEstado("EXITOSA");
+                            System.out.println("Compra verificada correctamente: " + b);
+                        } else {
+                            transaccion.setEstado("RECHAZADA");
+                            System.err.println("No quedan plazas disponibles para: " + b);
+                        }
+                        break;
+                    }
+                }
+            } else {
+                transaccion.setEstado("RECHAZADA");
+                System.err.println("Firma incorrecta, compra rechazada");
+            }
+
+            // 4. Enviar transacción al cliente
+            salida.writeObject(transaccion);
+            salida.flush();
+
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
     }
+
+
 
     public static void listarBilletes(){
 
@@ -111,18 +168,18 @@ public class HiloCliente extends Thread {
 
                     if (passwdCorrecta) {
                         System.out.println("Login correctamente");
-                        salida.writeUTF("200");
+                        salida.writeObject("200");
                         salida.flush();
 
                     } else {
                         System.err.println("Login incorrecto");
-                        salida.writeUTF("500");
+                        salida.writeObject("500");
                         salida.flush();
                     }
 
             }else{
                 System.err.println("Usuario no encontrado, ingrese un usuario valido");
-                salida.writeUTF("400");
+                salida.writeObject("400");
                 salida.flush();
             }
         } catch (IOException e) {
@@ -135,12 +192,12 @@ public class HiloCliente extends Thread {
             Usuario u = (Usuario) entrada.readObject();
 
             if (usuarios.containsKey(u.getUsuario())) {
-                salida.writeUTF("500");
+                salida.writeObject("500");
                 salida.flush();
 
             }else{
                 usuarios.put(u.getUsuario(), u);
-                salida.writeUTF("200");
+                salida.writeObject("200");
                 salida.flush();
 
             }

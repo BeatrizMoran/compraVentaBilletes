@@ -1,11 +1,10 @@
+import models.Billete;
 import models.Usuario;
+import models.Transaccion;
 
-import javax.crypto.BadPaddingException;
-import javax.crypto.Cipher;
-import javax.crypto.IllegalBlockSizeException;
-import javax.crypto.NoSuchPaddingException;
+
+
 import java.io.*;
-import java.net.ServerSocket;
 import java.net.Socket;
 import java.security.*;
 import java.util.*;
@@ -87,14 +86,16 @@ public class Cliente {
                         login();
                         break;
                     case 3:
+                        comprar(privada);
                         break;
                     case 4:
                             Billete[] billetes = (Billete[]) in.readObject();
-                            System.out.println("******* Lista de billetes: *******");
-                            for(Billete b : billetes){
-                                System.out.println(b.toString());
+                            if(billetes!=null){
+                                System.out.println("******* Lista de billetes: *******");
+                                for(Billete b : billetes){
+                                    System.out.println(b.toString());
+                                }
                             }
-
                         break;
                     case 5:
                         System.out.println("saliendo del programa");
@@ -115,6 +116,66 @@ public class Cliente {
 
     }
 
+    public static void comprar(PrivateKey privada){
+        try {
+            Billete[] billetes = (Billete[]) in.readObject();
+            if(billetes!=null){
+                System.out.println("******* Selecciona un billete para comprar" +
+                        "\nLista de billetes: *******");
+                int i = 1;
+                for(Billete b : billetes){
+                    System.out.println(i + "-" + b.toString());
+                    i++;
+                }
+            }
+
+            System.out.println("Introduzca el billete a comprar:" );
+            Scanner sc = new Scanner(System.in);
+            if (!sc.hasNextInt()) {
+                System.err.println("Error.- Introduce un numero entero");
+                sc.nextLine();
+                return;
+            }
+            // Selección del billete
+            int indice = sc.nextInt();
+            Billete seleccionado = billetes[indice - 1];
+
+// Convertir el billete a bytes para firmar
+            ByteArrayOutputStream bos = new ByteArrayOutputStream();
+            ObjectOutputStream oos = new ObjectOutputStream(bos);
+            oos.writeObject(seleccionado);
+            oos.flush();
+            byte[] mensajeBytes = bos.toByteArray();
+
+// Crear la firma
+            Signature sig = Signature.getInstance("SHA256withRSA");
+            sig.initSign(privada);
+            sig.update(mensajeBytes);
+            byte[] firma = sig.sign();
+
+// Enviar al servidor
+            out.writeObject(seleccionado);  // Objeto models.Billete
+            out.writeObject(firma);          // Firma del objeto
+            out.flush();
+            System.out.println("models.Billete y firma enviados al servidor");
+
+            // Recibir resultado
+            Transaccion transaccion = (Transaccion) in.readObject();
+            System.out.println("Resultado de la compra: " + transaccion);
+
+
+        } catch (NoSuchAlgorithmException e) {
+            throw new RuntimeException(e);
+        } catch (InvalidKeyException e) {
+            throw new RuntimeException(e);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        } catch (ClassNotFoundException e) {
+            throw new RuntimeException(e);
+        } catch (SignatureException e) {
+            throw new RuntimeException(e);
+        }
+    }
     public static void registrarse(){
         try {
 
@@ -171,7 +232,7 @@ public class Cliente {
 
 
                 System.out.println("Datos enviados cifrados correctamente.");
-                String respuesta = in.readUTF();
+                String respuesta = (String) in.readObject();
                 if(respuesta.equals("200")){
                     System.out.println("Usuario registrado correctamente: " + u);
                 }else{
@@ -183,6 +244,8 @@ public class Cliente {
         } catch (NoSuchAlgorithmException e) {
             throw new RuntimeException(e);
         } catch (IOException e) {
+            throw new RuntimeException(e);
+        } catch (ClassNotFoundException e) {
             throw new RuntimeException(e);
         }
 
@@ -205,19 +268,17 @@ public class Cliente {
         // Hasheamos la contraseña ingresada y la comparamos con la almacenada
             String contrasenaHasheada = hashContrasena(passwd);
             out.writeUTF(usuario);
-
             out.writeUTF(contrasenaHasheada);
             out.flush();
 
-
             //leer respuesta
-            String respuesta = in.readUTF();
+            String respuesta = (String) in.readObject();
 
             if(respuesta.equals("200")){
                 System.out.println("Login exitoso");
                 logueado = true;
             }else if(respuesta.equals("400")){
-                System.out.println("Usuario no existente");
+                System.err.println("Usuario no existente");
                 logueado = false;
             }
             else{
@@ -230,9 +291,9 @@ public class Cliente {
             throw new RuntimeException(e);
         } catch (IOException e) {
             throw new RuntimeException(e);
+        } catch (ClassNotFoundException e) {
+            throw new RuntimeException(e);
         }
-
-
 
 
     }
