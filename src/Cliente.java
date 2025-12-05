@@ -26,7 +26,7 @@ public class Cliente {
 
         Scanner sc = new Scanner(System.in);
         try {
-            String menu = "1.Registro\n2.Iniciar sesion\n3.Comprar billetes\n4.Consultar billetes\n5.Salir";
+            String menu = "1.Registro\n2.Iniciar sesion\n3.Comprar billetes\n4.Consultar billetes\n5.Logout\n6.Salir";
             Socket cliente = new Socket("localhost", 5555);
 
             out = new ObjectOutputStream(cliente.getOutputStream());
@@ -50,7 +50,7 @@ public class Cliente {
 
             int opc = -1;
 
-            while(opc != 5){
+            while(opc != 6){
                 System.out.println(menu + "\n  - Ingrese una opcion:");
                 if (!sc.hasNextInt()) {
                     System.err.println("Introduce un numero entero");
@@ -60,8 +60,6 @@ public class Cliente {
                 opc = sc.nextInt();
                 sc.nextLine();
 
-                out.writeInt(opc);
-                out.flush();
 
 
                 if(!logueado){
@@ -79,6 +77,8 @@ public class Cliente {
                 }
 
                 System.out.println("Opcion seleccionada: " + opc);
+                out.writeInt(opc);
+                out.flush();
 
 
                 switch(opc){
@@ -101,6 +101,9 @@ public class Cliente {
                             }
                         break;
                     case 5:
+                        logueado = false;
+                        break;
+                    case 6:
                         System.out.println("saliendo del programa");
                         System.exit(0);
                         break;
@@ -139,28 +142,40 @@ public class Cliente {
                 sc.nextLine();
                 return;
             }
+
             // Selección del billete
             int indice = sc.nextInt();
-            Billete seleccionado = billetes[indice - 1];
+            Billete seleccionado = null;
+            if (billetes != null) {
+                seleccionado = billetes[indice - 1];
+                if(seleccionado.getPlazasDisponibles() == 0){
+                    System.err.println("Error.-  No hay plazas suficientes");
+                    // Avisar al servidor que no se realizará la compra
+                    out.writeObject("CANCEL");
+                    out.flush();
+                    return;
+                }
+            }
 
             // Convertir el billete a bytes para firmar
+            out.writeObject("OK");
             ByteArrayOutputStream bos = new ByteArrayOutputStream();
             ObjectOutputStream oos = new ObjectOutputStream(bos);
             oos.writeObject(seleccionado);
             oos.flush();
             byte[] mensajeBytes = bos.toByteArray();
 
-            // Crear la firma
+            // Crear la firma con la clave privada
             Signature sig = Signature.getInstance("SHA256withRSA");
             sig.initSign(privada);
             sig.update(mensajeBytes);
-            byte[] firma = sig.sign();
+            byte[] firma = sig.sign(); //objeto billete firmado
 
             // Enviar al servidor
             out.writeObject(seleccionado);
             out.writeObject(firma);
             out.flush();
-            System.out.println("models.Billete y firma enviados al servidor");
+            System.out.println("Billete y firma enviados al servidor");
 
             // Recibir resultado
             Transaccion transaccion = (Transaccion) in.readObject();

@@ -8,6 +8,7 @@ import java.io.*;
 import java.net.Socket;
 import java.security.*;
 import java.util.*;
+import java.util.concurrent.Semaphore;
 
 public class HiloCliente extends Thread {
     private ObjectOutputStream salida;
@@ -15,14 +16,17 @@ public class HiloCliente extends Thread {
 
     private static Map<String, Usuario> usuarios = new HashMap<>();
 
+    // Semáforo con 1 permiso (solo un hilo puede modificar a la vez)
+    private final Semaphore semaforo = new Semaphore(1);
+
 
     private Socket cliente;
     public static Billete[] billetes = {
-            new Billete("Madrid", "Barcelona", 45.50, 12),
-            new Billete("Sevilla", "Madrid", 38.00, 0),
-            new Billete("Valencia", "Bilbao", 50.25, 5),
-            new Billete("Zaragoza", "Málaga", 32.10, 10),
-            new Billete("Madrid", "Lisboa", 80.00, 7)
+            new Billete(1, "Madrid", "Barcelona", 45.50, 12),
+            new Billete(2, "Sevilla", "Madrid", 38.00, 0),
+            new Billete(3, "Valencia", "Bilbao", 50.25, 5),
+            new Billete(4, "Zaragoza", "Málaga", 32.10, 10),
+            new Billete(5, "Madrid", "Lisboa", 80.00, 7)
     };
 
     public HiloCliente(Socket cliente) {
@@ -80,8 +84,14 @@ public class HiloCliente extends Thread {
         }
     }
 
-    public synchronized void comprarBilletes(PublicKey publicaUsuario) {
+    public void comprarBilletes(PublicKey publicaUsuario) {
         try {
+            Object obj = entrada.readObject();
+
+            if (obj instanceof String && obj.equals("CANCEL")) {
+                System.out.println("Compra cancelada por falta de plazas.");
+                return;
+            }
             // 1. Recibir objeto y firma
             Billete billeteRecibido = (Billete) entrada.readObject();
             byte[] firmaCliente = (byte[]) entrada.readObject();
@@ -93,6 +103,7 @@ public class HiloCliente extends Thread {
             oos.flush();
             byte[] mensajeBytes = bos.toByteArray();
 
+            //VERIFICA CON LA CLAVE PUBLICA EL MENSAJE FIRMADO
             Signature sig = Signature.getInstance("SHA256withRSA");
             sig.initVerify(publicaUsuario);
             sig.update(mensajeBytes);
@@ -101,16 +112,22 @@ public class HiloCliente extends Thread {
             // 3. Crear transacción
             Transaccion transaccion = new Transaccion(billeteRecibido);
 
+
+// 🔒 Adquirir el semáforo antes de modificar billetes
+            semaforo.acquire();
             if (valida) {
                 transaccion.setEstado("EXITOSA");
                 System.out.println("Compra verificada correctamente: " + billeteRecibido);
                 // Buscar el billete original en el servidor
                 for (Billete b : billetes) {
-                    if (b.equals(billeteRecibido)) {
+                    System.out.println("b: " + b + " --> objeto billete recibido: " + billeteRecibido);
+                    if (b.getId() ==  billeteRecibido.getId()) {
                         if (b.getPlazasDisponibles() > 0) {
                             b.setPlazasDisponibles(b.getPlazasDisponibles() - 1);
                             transaccion.setEstado("EXITOSA");
                             System.out.println("Compra verificada correctamente: " + b);
+                            System.out.println(Arrays.toString(billetes));
+
                         } else {
                             transaccion.setEstado("RECHAZADA");
                             System.err.println("No quedan plazas disponibles para: " + b);
@@ -122,18 +139,21 @@ public class HiloCliente extends Thread {
                 transaccion.setEstado("RECHAZADA");
                 System.err.println("Firma incorrecta, compra rechazada");
             }
-
             salida.writeObject(transaccion);
             salida.flush();
 
         } catch (Exception e) {
             throw new RuntimeException(e);
+        }finally{
+            semaforo.release();
         }
     }
 
 
     public synchronized void listarBilletes() {
         try{
+            //Vaciar la caché interna para enviar el array actualizado
+            salida.reset();
             salida.writeObject(billetes);
             salida.flush();
         } catch (IOException e) {

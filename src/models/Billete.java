@@ -1,14 +1,17 @@
 package models;
 
 import java.io.Serializable;
+import java.util.Objects;
 
 public class Billete implements Serializable {
+    private int id;
     private String origen;
     private String destino;
     private double precio;
     private int plazasDisponibles;
 
-    public Billete(String origen, String destino, double precio, int plazasDisponibles) {
+    public Billete(int id, String origen, String destino, double precio, int plazasDisponibles) {
+        this.id = id;
         this.origen = origen;
         this.destino = destino;
         this.precio = precio;
@@ -36,6 +39,14 @@ public class Billete implements Serializable {
         this.plazasDisponibles = plazasDisponibles;
     }
 
+    public int getId() {
+        return id;
+    }
+
+    public void setId(int id) {
+        this.id = id;
+    }
+
     @Override
     public String toString() {
         return "models.Billete{" +
@@ -45,4 +56,6 @@ public class Billete implements Serializable {
                 ", plazasDisponibles=" + plazasDisponibles +
                 '}';
     }
+
+
 }
