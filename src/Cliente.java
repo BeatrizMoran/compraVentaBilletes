@@ -3,7 +3,10 @@ import models.Usuario;
 import models.Transaccion;
 
 
-
+import javax.crypto.BadPaddingException;
+import javax.crypto.Cipher;
+import javax.crypto.IllegalBlockSizeException;
+import javax.crypto.NoSuchPaddingException;
 import java.io.*;
 import java.net.Socket;
 import java.security.*;
@@ -140,22 +143,22 @@ public class Cliente {
             int indice = sc.nextInt();
             Billete seleccionado = billetes[indice - 1];
 
-// Convertir el billete a bytes para firmar
+            // Convertir el billete a bytes para firmar
             ByteArrayOutputStream bos = new ByteArrayOutputStream();
             ObjectOutputStream oos = new ObjectOutputStream(bos);
             oos.writeObject(seleccionado);
             oos.flush();
             byte[] mensajeBytes = bos.toByteArray();
 
-// Crear la firma
+            // Crear la firma
             Signature sig = Signature.getInstance("SHA256withRSA");
             sig.initSign(privada);
             sig.update(mensajeBytes);
             byte[] firma = sig.sign();
 
-// Enviar al servidor
-            out.writeObject(seleccionado);  // Objeto models.Billete
-            out.writeObject(firma);          // Firma del objeto
+            // Enviar al servidor
+            out.writeObject(seleccionado);
+            out.writeObject(firma);
             out.flush();
             System.out.println("models.Billete y firma enviados al servidor");
 
@@ -219,17 +222,21 @@ public class Cliente {
 
 
             if (!errores.isEmpty()) {
-                for (Object error : errores) {
+                out.writeObject("ERROR");
+                out.flush();
+                for (String error : errores) {
                     System.err.println(error);
                 }
+                return;
             } else {
+
+                out.writeObject("OK");
+                out.flush();
 
                 Usuario u = new Usuario(nombre, apellido, edad, email, usuario, contrasenaHasheada);
 
-
                 out.writeObject(u);
                 out.flush();
-
 
                 System.out.println("Datos enviados cifrados correctamente.");
                 String respuesta = (String) in.readObject();
@@ -265,9 +272,16 @@ public class Cliente {
         System.out.println("Contraseña:");
         String passwd = sc.nextLine();
 
-        // Hasheamos la contraseña ingresada y la comparamos con la almacenada
+            //cifrar usuario con la clave publica del servidor
+            Cipher cipher = Cipher.getInstance("RSA");
+            cipher.init(Cipher.ENCRYPT_MODE, publicaServidor);
+            //cifrarlo en un array de bytes
+            byte[] usuarioCifrado = cipher.doFinal(usuario.getBytes());
+
+            // Hasheamos la contraseña ingresada
             String contrasenaHasheada = hashContrasena(passwd);
-            out.writeUTF(usuario);
+            //out.writeUTF(usuario);
+            out.writeObject(usuarioCifrado);
             out.writeUTF(contrasenaHasheada);
             out.flush();
 
@@ -292,6 +306,14 @@ public class Cliente {
         } catch (IOException e) {
             throw new RuntimeException(e);
         } catch (ClassNotFoundException e) {
+            throw new RuntimeException(e);
+        } catch (NoSuchPaddingException e) {
+            throw new RuntimeException(e);
+        } catch (IllegalBlockSizeException e) {
+            throw new RuntimeException(e);
+        } catch (BadPaddingException e) {
+            throw new RuntimeException(e);
+        } catch (InvalidKeyException e) {
             throw new RuntimeException(e);
         }
 

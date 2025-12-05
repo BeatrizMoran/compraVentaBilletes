@@ -14,7 +14,6 @@ public class Transaccion implements Serializable {
         this.estado = "PENDIENTE";
     }
 
-    // Getters y setters
     public String getId() { return id; }
     public Billete getBillete() { return billete; }
     public String getEstado() { return estado; }

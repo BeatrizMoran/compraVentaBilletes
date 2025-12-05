@@ -10,7 +10,7 @@ import java.security.*;
 import java.util.*;
 
 public class HiloCliente extends Thread {
-    private  ObjectOutputStream salida;
+    private ObjectOutputStream salida;
     private ObjectInputStream entrada;
 
     private static Map<String, Usuario> usuarios = new HashMap<>();
@@ -19,7 +19,7 @@ public class HiloCliente extends Thread {
     private Socket cliente;
     public static Billete[] billetes = {
             new Billete("Madrid", "Barcelona", 45.50, 12),
-            new Billete("Sevilla", "Madrid", 38.00, 8),
+            new Billete("Sevilla", "Madrid", 38.00, 0),
             new Billete("Valencia", "Bilbao", 50.25, 5),
             new Billete("Zaragoza", "Málaga", 32.10, 10),
             new Billete("Madrid", "Lisboa", 80.00, 7)
@@ -31,13 +31,13 @@ public class HiloCliente extends Thread {
 
     @Override
     public void run() {
-        try{
+        try {
             //Generar par de claves
             KeyPairGenerator keyGen = KeyPairGenerator.getInstance("RSA");
             System.out.println("Generando claves...");
             KeyPair keys = keyGen.generateKeyPair();
-            PrivateKey privada  = keys.getPrivate();
-            PublicKey publica  = keys.getPublic();
+            PrivateKey privada = keys.getPrivate();
+            PublicKey publica = keys.getPublic();
 
             salida = new ObjectOutputStream(cliente.getOutputStream());
             entrada = new ObjectInputStream(cliente.getInputStream());
@@ -48,30 +48,28 @@ public class HiloCliente extends Thread {
             salida.writeObject(publica);
             salida.flush();
 
-                while(true){
-                    int opcion = entrada.readInt();
+            while (true) {
+                int opcion = entrada.readInt();
 
-                    switch(opcion){
-                        case 1:
-                            registro();
-                            break;
-                        case 2:
-                            login();
-                            break;
-                        case 3:
-                            //mandar billetes
-                            salida.writeObject(billetes);
-                            salida.flush();
-                            comprarBilletes(publicaUsuario);
-                            break;
-                        case 4:
-                            salida.writeObject(billetes);
-                            salida.flush();
-                            break;
-                    }
+                switch (opcion) {
+                    case 1:
+                        registro();
+                        break;
+                    case 2:
+                        login(privada);
+                        break;
+                    case 3:
+                        //mandar billetes
+                        listarBilletes();
+                        comprarBilletes(publicaUsuario);
+                        break;
+                    case 4:
+                        listarBilletes();
+                        break;
                 }
+            }
             //cliente.close();
-        }catch (IOException e) {
+        } catch (IOException e) {
             throw new RuntimeException(e);
         } catch (NoSuchAlgorithmException e) {
             throw new RuntimeException(e);
@@ -125,7 +123,6 @@ public class HiloCliente extends Thread {
                 System.err.println("Firma incorrecta, compra rechazada");
             }
 
-            // 4. Enviar transacción al cliente
             salida.writeObject(transaccion);
             salida.flush();
 
@@ -135,11 +132,14 @@ public class HiloCliente extends Thread {
     }
 
 
-
-    public static void listarBilletes(){
-
+    public synchronized void listarBilletes() {
+        try{
+            salida.writeObject(billetes);
+            salida.flush();
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
     }
-
 
 
     public static String descifrar(byte[] msg, PrivateKey clave) throws Exception {
@@ -154,53 +154,71 @@ public class HiloCliente extends Thread {
         return cipher.doFinal(msg.getBytes());
     }
 
-    public void login(){
+    public void login(PrivateKey clavePrivada) {
         try {
-            String usuario = entrada.readUTF();
+            byte[] usuarioCifrado = (byte[]) entrada.readObject();
             String contrasenaHasheada = entrada.readUTF();
 
+            //descifrar usuario con la clave privada del servidor
+            String usuario = descifrar(usuarioCifrado, clavePrivada);
+
             if (usuarios.containsKey(usuario)) {
-                    System.out.println("Usuario existente");
-                    Usuario u = usuarios.get(usuario);
+                System.out.println("Usuario existente");
+                Usuario u = usuarios.get(usuario);
 
-                    System.out.println("usuario encontrado: " + u.getNombre());
-                    boolean passwdCorrecta =  contrasenaHasheada.equals(u.getPasswd());
+                System.out.println("usuario encontrado: " + u.getNombre());
+                boolean passwdCorrecta = contrasenaHasheada.equals(u.getPasswd());
 
-                    if (passwdCorrecta) {
-                        System.out.println("Login correctamente");
-                        salida.writeObject("200");
-                        salida.flush();
+                if (passwdCorrecta) {
+                    System.out.println("Login correctamente");
+                    salida.writeObject("200");
+                    salida.flush();
 
-                    } else {
-                        System.err.println("Login incorrecto");
-                        salida.writeObject("500");
-                        salida.flush();
-                    }
+                } else {
+                    System.err.println("Login incorrecto");
+                    salida.writeObject("500");
+                    salida.flush();
+                }
 
-            }else{
+            } else {
                 System.err.println("Usuario no encontrado, ingrese un usuario valido");
                 salida.writeObject("400");
                 salida.flush();
             }
         } catch (IOException e) {
             throw new RuntimeException(e);
+        } catch (ClassNotFoundException e) {
+            throw new RuntimeException(e);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
         }
     }
 
-    public void registro(){
+    public void registro() {
         try {
-            Usuario u = (Usuario) entrada.readObject();
 
-            if (usuarios.containsKey(u.getUsuario())) {
-                salida.writeObject("500");
-                salida.flush();
+            Object msg = entrada.readObject();
 
-            }else{
-                usuarios.put(u.getUsuario(), u);
-                salida.writeObject("200");
-                salida.flush();
-
+            if ("ERROR".equals(msg)) {
+                System.out.println("Errores de validacion en el registro.");
+                return;
             }
+
+            if ("OK".equals(msg)) {
+                Usuario u = (Usuario) entrada.readObject();
+
+                if (usuarios.containsKey(u.getUsuario())) {
+                    salida.writeObject("500");
+                    salida.flush();
+
+                } else {
+                    usuarios.put(u.getUsuario(), u);
+                    salida.writeObject("200");
+                    salida.flush();
+
+                }
+            }
+
 
         } catch (IOException e) {
             throw new RuntimeException(e);
@@ -208,7 +226,6 @@ public class HiloCliente extends Thread {
             throw new RuntimeException(e);
         }
     }
-
 
 
 }
