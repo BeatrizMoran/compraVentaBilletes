@@ -20,6 +20,7 @@ public class Cliente {
     private static PublicKey publicaServidor;
     private static ObjectOutputStream out;
     private static ObjectInputStream in;
+    private static int opc;
 
 
     public static void main(String[] args) {
@@ -48,7 +49,7 @@ public class Cliente {
             publicaServidor = (PublicKey) in.readObject();
 
 
-            int opc = -1;
+            opc = -1;
 
             while(opc != 6){
                 System.out.println(menu + "\n  - Ingrese una opcion:");
@@ -77,7 +78,7 @@ public class Cliente {
                 }
 
                 System.out.println("Opcion seleccionada: " + opc);
-                out.writeInt(opc);
+                out.writeObject(opc);
                 out.flush();
 
 
@@ -122,78 +123,73 @@ public class Cliente {
 
     }
 
-    public static void comprar(PrivateKey privada){
+    public static void comprar(PrivateKey privada) {
         try {
             Billete[] billetes = (Billete[]) in.readObject();
-            if(billetes!=null){
-                System.out.println("******* Selecciona un billete para comprar" +
-                        "\nLista de billetes: *******");
-                int i = 1;
-                for(Billete b : billetes){
-                    System.out.println(i + "-" + b.toString());
-                    i++;
+            if (billetes != null) {
+                System.out.println("******* Selecciona un billete *******");
+                for (int i = 0; i < billetes.length; i++) {
+                    System.out.println((i + 1) + " - " + billetes[i]);
                 }
             }
 
-            System.out.println("Introduzca el billete a comprar:" );
             Scanner sc = new Scanner(System.in);
-            if (!sc.hasNextInt()) {
-                System.err.println("Error.- Introduce un numero entero");
-                sc.nextLine();
+            System.out.println("Introduzca el número del billete a comprar:");
+            int indice = sc.nextInt();
+
+            Billete seleccionado = billetes[indice - 1];
+            if (seleccionado.getPlazasDisponibles() == 0) {
+                System.err.println("No hay plazas disponibles");
+                out.writeObject("CANCEL");
+                out.flush();
                 return;
             }
 
-            // Selección del billete
-            int indice = sc.nextInt();
-            Billete seleccionado = null;
-            if (billetes != null) {
-                seleccionado = billetes[indice - 1];
-                if(seleccionado.getPlazasDisponibles() == 0){
-                    System.err.println("Error.-  No hay plazas suficientes");
-                    // Avisar al servidor que no se realizará la compra
-                    out.writeObject("CANCEL");
-                    out.flush();
-                    return;
-                }
-            }
-
-            // Convertir el billete a bytes para firmar
+            // Enviar inicial OK
             out.writeObject("OK");
+            out.flush();
+
+            // Firmar billete
             ByteArrayOutputStream bos = new ByteArrayOutputStream();
             ObjectOutputStream oos = new ObjectOutputStream(bos);
             oos.writeObject(seleccionado);
             oos.flush();
             byte[] mensajeBytes = bos.toByteArray();
 
-            // Crear la firma con la clave privada
             Signature sig = Signature.getInstance("SHA256withRSA");
             sig.initSign(privada);
             sig.update(mensajeBytes);
-            byte[] firma = sig.sign(); //objeto billete firmado
+            byte[] firma = sig.sign();
 
-            // Enviar al servidor
-            out.writeObject(seleccionado);
-            out.writeObject(firma);
-            out.flush();
-            System.out.println("Billete y firma enviados al servidor");
+            boolean comprado = false;
+            while (!comprado) {
+                out.writeObject(seleccionado);
+                out.writeObject(firma);
+                out.flush();
+                System.out.println("Billete y firma enviados al servidor");
 
-            // Recibir resultado
-            Transaccion transaccion = (Transaccion) in.readObject();
-            System.out.println("Resultado de la compra: " + transaccion);
+                Object resp = in.readObject();
+                if (resp instanceof Transaccion) {
+                    Transaccion transaccion = (Transaccion) resp;
+                    System.out.println("Resultado de la compra: " + transaccion);
+                    comprado = true;
+                } else if ("OTRO_CLIENTE_ESPERANDO".equals(resp)) {
+                    System.out.println("Otro cliente está comprando este billete. Esperando turno...");
+                    System.out.println(opc);
 
+                    // Enviar algo para mantener flujo
+                    out.writeObject(opc); // dummy
+                    out.writeObject("OK");
+                    out.flush();
+                    Thread.sleep(1000);
+                }
+            }
 
-        } catch (NoSuchAlgorithmException e) {
-            throw new RuntimeException(e);
-        } catch (InvalidKeyException e) {
-            throw new RuntimeException(e);
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        } catch (ClassNotFoundException e) {
-            throw new RuntimeException(e);
-        } catch (SignatureException e) {
-            throw new RuntimeException(e);
+        } catch (Exception e) {
+            e.printStackTrace();
         }
     }
+
     public static void registrarse(){
         try {
 

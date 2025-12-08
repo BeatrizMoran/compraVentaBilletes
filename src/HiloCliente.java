@@ -16,8 +16,6 @@ public class HiloCliente extends Thread {
 
     private static Map<String, Usuario> usuarios = new HashMap<>();
 
-    // Semáforo con 1 permiso (solo un hilo puede modificar a la vez)
-    private final Semaphore semaforo = new Semaphore(1);
 
 
     private Socket cliente;
@@ -53,7 +51,7 @@ public class HiloCliente extends Thread {
             salida.flush();
 
             while (true) {
-                int opcion = entrada.readInt();
+                int opcion = (int) entrada.readObject();
 
                 switch (opcion) {
                     case 1:
@@ -89,65 +87,94 @@ public class HiloCliente extends Thread {
             Object obj = entrada.readObject();
 
             if (obj instanceof String && obj.equals("CANCEL")) {
-                System.out.println("Compra cancelada por falta de plazas.");
+                System.out.println("Compra cancelada por el cliente.");
                 return;
             }
-            // 1. Recibir objeto y firma
+
+            // 1 - Recibir billete y firma
             Billete billeteRecibido = (Billete) entrada.readObject();
             byte[] firmaCliente = (byte[]) entrada.readObject();
 
-            // 2. Convertir a bytes para verificar firma
+            // 2 - Convertir a bytes para verificar firma
             ByteArrayOutputStream bos = new ByteArrayOutputStream();
             ObjectOutputStream oos = new ObjectOutputStream(bos);
             oos.writeObject(billeteRecibido);
             oos.flush();
             byte[] mensajeBytes = bos.toByteArray();
 
-            //VERIFICA CON LA CLAVE PUBLICA EL MENSAJE FIRMADO
+            // Verificación firma
             Signature sig = Signature.getInstance("SHA256withRSA");
             sig.initVerify(publicaUsuario);
             sig.update(mensajeBytes);
             boolean valida = sig.verify(firmaCliente);
 
-            // 3. Crear transacción
             Transaccion transaccion = new Transaccion(billeteRecibido);
 
+            if (!valida) {
+                transaccion.setEstado("RECHAZADA");
+                System.err.println("Firma incorrecta. Compra rechazada.");
+                salida.writeObject(transaccion);
+                salida.flush();
+                return;
+            }
 
-// 🔒 Adquirir el semáforo antes de modificar billetes
-            semaforo.acquire();
-            if (valida) {
-                transaccion.setEstado("EXITOSA");
-                System.out.println("Compra verificada correctamente: " + billeteRecibido);
-                // Buscar el billete original en el servidor
-                for (Billete b : billetes) {
-                    System.out.println("b: " + b + " --> objeto billete recibido: " + billeteRecibido);
-                    if (b.getId() ==  billeteRecibido.getId()) {
+            System.out.println("Firma válida. Cliente autorizado.");
+
+            // Buscar billete original
+            for (Billete b : billetes) {
+                if (b.getId() == billeteRecibido.getId()) {
+
+                    // Mensaje previo si otro cliente ya está comprando
+                    boolean avisoEnviado = false;
+                    while (true) {
+                        synchronized (b) {  // bloque crítico por billete
+                            if (!b.isEnCompra()) {
+                                b.setEnCompra(true); // marcar como ocupado
+                                break;
+                            }
+                        }
+                        if (!avisoEnviado) {
+                            salida.writeObject("OTRO_CLIENTE_ESPERANDO");
+                            salida.flush();
+                            System.out.println("Otro cliente está comprando este billete. Esperando turno...");
+                            avisoEnviado = true;
+                        }
+                        // Pequeño retraso para no saturar el CPU
+                        Thread.sleep(500);
+                    }
+
+                    // Acceso concedido
+                    System.out.println("Acceso concedido al billete " + b.getId());
+
+                    // Simular tiempo de procesamiento
+                    Thread.sleep(3000);
+
+                    synchronized (b) {
                         if (b.getPlazasDisponibles() > 0) {
                             b.setPlazasDisponibles(b.getPlazasDisponibles() - 1);
                             transaccion.setEstado("EXITOSA");
-                            System.out.println("Compra verificada correctamente: " + b);
-                            System.out.println(Arrays.toString(billetes));
-
+                            System.out.println("Compra realizada. Plazas restantes: " + b.getPlazasDisponibles());
                         } else {
                             transaccion.setEstado("RECHAZADA");
-                            System.err.println("No quedan plazas disponibles para: " + b);
+                            System.err.println("No quedan plazas disponibles para este billete.");
                         }
-                        break;
+                        b.setEnCompra(false); // liberar billete
                     }
+
+                    // Enviar resultado al cliente
+                    salida.writeObject(transaccion);
+                    salida.flush();
+
+                    break;
                 }
-            } else {
-                transaccion.setEstado("RECHAZADA");
-                System.err.println("Firma incorrecta, compra rechazada");
             }
-            salida.writeObject(transaccion);
-            salida.flush();
 
         } catch (Exception e) {
-            throw new RuntimeException(e);
-        }finally{
-            semaforo.release();
+            e.printStackTrace();
         }
     }
+
+
 
 
     public synchronized void listarBilletes() {

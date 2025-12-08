@@ -10,6 +10,9 @@ public class Billete implements Serializable {
     private double precio;
     private int plazasDisponibles;
 
+    // para avisar cuando otro cliente esté comprando
+    private boolean enCompra = false;
+
     public Billete(int id, String origen, String destino, double precio, int plazasDisponibles) {
         this.id = id;
         this.origen = origen;
@@ -45,6 +48,14 @@ public class Billete implements Serializable {
 
     public void setId(int id) {
         this.id = id;
+    }
+
+    public boolean isEnCompra() {
+        return enCompra;
+    }
+
+    public void setEnCompra(boolean enCompra) {
+        this.enCompra = enCompra;
     }
 
     @Override
