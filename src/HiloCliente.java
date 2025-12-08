@@ -84,6 +84,7 @@ public class HiloCliente extends Thread {
 
     public void comprarBilletes(PublicKey publicaUsuario) {
         try {
+
             Object obj = entrada.readObject();
 
             if (obj instanceof String && obj.equals("CANCEL")) {
@@ -118,62 +119,58 @@ public class HiloCliente extends Thread {
                 return;
             }
 
-            System.out.println("Firma válida. Cliente autorizado.");
+            System.out.println(" Firma válida. Cliente autorizado.");
 
             // Buscar billete original
             for (Billete b : billetes) {
+
                 if (b.getId() == billeteRecibido.getId()) {
 
-                    // Mensaje previo si otro cliente ya está comprando
-                    boolean avisoEnviado = false;
-                    while (true) {
-                        synchronized (b) {  // bloque crítico por billete
-                            if (!b.isEnCompra()) {
-                                b.setEnCompra(true); // marcar como ocupado
-                                break;
-                            }
-                        }
-                        if (!avisoEnviado) {
-                            salida.writeObject("OTRO_CLIENTE_ESPERANDO");
-                            salida.flush();
-                            System.out.println("Otro cliente está comprando este billete. Esperando turno...");
-                            avisoEnviado = true;
-                        }
-                        // Pequeño retraso para no saturar el CPU
-                        Thread.sleep(500);
+                    // Comprobar si otro cliente está comprando antes de sincronizar
+                    if (b.isEnCompra()) {
+                        System.out.println(" Otro cliente está comprando este billete... esperando turno.");
+                        salida.writeObject("OTRO_CLIENTE_ESPERANDO");
+                        salida.flush();
+                    }else{
+                        salida.writeObject("OK");
+                        salida.flush();
                     }
 
-                    // Acceso concedido
-                    System.out.println("Acceso concedido al billete " + b.getId());
 
-                    // Simular tiempo de procesamiento
-                    Thread.sleep(3000);
+                    synchronized (b) {  // Bloque crítico por billete
 
-                    synchronized (b) {
+                            b.setEnCompra(true);
+
+                        System.out.println(" Acceso concedido al billete " + b.getId());
+
+                        // para poder comprobar la concurrencia
+                        Thread.sleep(3000);
+
                         if (b.getPlazasDisponibles() > 0) {
                             b.setPlazasDisponibles(b.getPlazasDisponibles() - 1);
+                            transaccion = new Transaccion(b); // usar billete real
+
                             transaccion.setEstado("EXITOSA");
-                            System.out.println("Compra realizada. Plazas restantes: " + b.getPlazasDisponibles());
+                            System.out.println(" Compra realizada. Plazas restantes: " + b.getPlazasDisponibles());
                         } else {
+                            transaccion = new Transaccion(b); // usar billete real
                             transaccion.setEstado("RECHAZADA");
-                            System.err.println("No quedan plazas disponibles para este billete.");
+                            System.err.println(" No quedan plazas disponibles para este billete.");
                         }
-                        b.setEnCompra(false); // liberar billete
+                        b.setEnCompra(false); // Liberar billete
+
                     }
-
-                    // Enviar resultado al cliente
-                    salida.writeObject(transaccion);
-                    salida.flush();
-
                     break;
                 }
             }
+            salida.reset();
+            salida.writeObject(transaccion);
+            salida.flush();
 
         } catch (Exception e) {
             e.printStackTrace();
         }
     }
-
 
 
 

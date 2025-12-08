@@ -161,29 +161,20 @@ public class Cliente {
             sig.update(mensajeBytes);
             byte[] firma = sig.sign();
 
-            boolean comprado = false;
-            while (!comprado) {
                 out.writeObject(seleccionado);
                 out.writeObject(firma);
                 out.flush();
                 System.out.println("Billete y firma enviados al servidor");
 
                 Object resp = in.readObject();
-                if (resp instanceof Transaccion) {
-                    Transaccion transaccion = (Transaccion) resp;
-                    System.out.println("Resultado de la compra: " + transaccion);
-                    comprado = true;
-                } else if ("OTRO_CLIENTE_ESPERANDO".equals(resp)) {
+                 if ("OTRO_CLIENTE_ESPERANDO".equals(resp)) {
                     System.out.println("Otro cliente está comprando este billete. Esperando turno...");
                     System.out.println(opc);
-
-                    // Enviar algo para mantener flujo
-                    out.writeObject(opc); // dummy
-                    out.writeObject("OK");
-                    out.flush();
-                    Thread.sleep(1000);
                 }
-            }
+
+            Transaccion transaccion = (Transaccion) in.readObject();
+            System.out.println("Resultado de la compra: " + transaccion);
+
 
         } catch (Exception e) {
             e.printStackTrace();
