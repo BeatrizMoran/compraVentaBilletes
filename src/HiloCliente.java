@@ -22,9 +22,9 @@ public class HiloCliente extends Thread {
     public static Billete[] billetes = {
             new Billete(1, "Madrid", "Barcelona", 45.50, 12),
             new Billete(2, "Sevilla", "Madrid", 38.00, 0),
-            new Billete(3, "Valencia", "Bilbao", 50.25, 5),
+            new Billete(3, "Valencia", "Bilbao", 50.25, 4),
             new Billete(4, "Zaragoza", "Málaga", 32.10, 10),
-            new Billete(5, "Madrid", "Lisboa", 80.00, 7)
+            new Billete(5, "Madrid", "Lisboa", 80.00, 3)
     };
 
     public HiloCliente(Socket cliente) {
@@ -96,10 +96,11 @@ public class HiloCliente extends Thread {
             Billete billeteRecibido = (Billete) entrada.readObject();
             byte[] firmaCliente = (byte[]) entrada.readObject();
 
-            // 2 - Convertir a bytes para verificar firma
-            ByteArrayOutputStream bos = new ByteArrayOutputStream();
-            ObjectOutputStream oos = new ObjectOutputStream(bos);
-            oos.writeObject(billeteRecibido);
+            // 2 - Convertir el objeto Billete en un array de bytes
+            // para poder verificar la firma digital del cliente
+            ByteArrayOutputStream bos = new ByteArrayOutputStream(); // flujo en memoria para almacenar bytes
+            ObjectOutputStream oos = new ObjectOutputStream(bos); // permite serializar objetos al flujo de bytes
+            oos.writeObject(billeteRecibido);// escribir el objeto Billete en el flujo
             oos.flush();
             byte[] mensajeBytes = bos.toByteArray();
 
@@ -139,21 +140,21 @@ public class HiloCliente extends Thread {
 
                     synchronized (b) {  // Bloque crítico por billete
 
-                            b.setEnCompra(true);
+                        b.setEnCompra(true);
 
                         System.out.println(" Acceso concedido al billete " + b.getId());
 
-                        // para poder comprobar la concurrencia
+                        // simular proceso de compra
                         Thread.sleep(3000);
 
                         if (b.getPlazasDisponibles() > 0) {
                             b.setPlazasDisponibles(b.getPlazasDisponibles() - 1);
-                            transaccion = new Transaccion(b); // usar billete real
+                            transaccion = new Transaccion(b);
 
                             transaccion.setEstado("EXITOSA");
                             System.out.println(" Compra realizada. Plazas restantes: " + b.getPlazasDisponibles());
                         } else {
-                            transaccion = new Transaccion(b); // usar billete real
+                            transaccion = new Transaccion(b);
                             transaccion.setEstado("RECHAZADA");
                             System.err.println(" No quedan plazas disponibles para este billete.");
                         }
@@ -220,13 +221,13 @@ public class HiloCliente extends Thread {
 
                 } else {
                     System.err.println("Login incorrecto");
-                    salida.writeObject("500");
+                    salida.writeObject("401");
                     salida.flush();
                 }
 
             } else {
                 System.err.println("Usuario no encontrado, ingrese un usuario valido");
-                salida.writeObject("400");
+                salida.writeObject("404");
                 salida.flush();
             }
         } catch (IOException e) {
@@ -252,7 +253,7 @@ public class HiloCliente extends Thread {
                 Usuario u = (Usuario) entrada.readObject();
 
                 if (usuarios.containsKey(u.getUsuario())) {
-                    salida.writeObject("500");
+                    salida.writeObject("409");
                     salida.flush();
 
                 } else {

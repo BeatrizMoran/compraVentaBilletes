@@ -33,6 +33,8 @@ public class Cliente {
             out = new ObjectOutputStream(cliente.getOutputStream());
             in = new ObjectInputStream(cliente.getInputStream());
 
+
+
             //generamos las claves del cliente
             KeyPairGenerator clavecliente = KeyPairGenerator.getInstance("RSA");
 
@@ -51,7 +53,7 @@ public class Cliente {
 
             opc = -1;
 
-            while(opc != 6){
+            while(true){
                 System.out.println(menu + "\n  - Ingrese una opcion:");
                 if (!sc.hasNextInt()) {
                     System.err.println("Introduce un numero entero");
@@ -61,7 +63,11 @@ public class Cliente {
                 opc = sc.nextInt();
                 sc.nextLine();
 
-
+                // Validación de rango antes de enviar al servidor
+                if (opc < 1 || opc > 6) {
+                    System.err.println("Opción no válida.\n");
+                    continue;
+                }
 
                 if(!logueado){
                     if(opc==3 || opc == 4){
@@ -93,13 +99,13 @@ public class Cliente {
                         comprar(privada);
                         break;
                     case 4:
-                            Billete[] billetes = (Billete[]) in.readObject();
-                            if(billetes!=null){
-                                System.out.println("******* Lista de billetes: *******");
-                                for(Billete b : billetes){
-                                    System.out.println(b.toString());
-                                }
+                        Billete[] billetes = (Billete[]) in.readObject();
+                        if(billetes!=null){
+                            System.out.println("******* Lista de billetes: *******");
+                            for(Billete b : billetes){
+                                System.out.println(b.toString());
                             }
+                        }
                         break;
                     case 5:
                         logueado = false;
@@ -108,9 +114,8 @@ public class Cliente {
                         System.out.println("saliendo del programa");
                         System.exit(0);
                         break;
-                    default:
-                        System.err.println("Opcion incorrecta");
                 }
+                System.out.println();
             }
 
         } catch (IOException e) {
@@ -119,9 +124,23 @@ public class Cliente {
             throw new RuntimeException(e);
         } catch (ClassNotFoundException e) {
             throw new RuntimeException(e);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
         }
 
     }
+    public static String descifrar(byte[] cifrado, PrivateKey clave) throws Exception {
+        // 1 - Descifrar con la clave privada
+        Cipher cipher = Cipher.getInstance("RSA");
+        cipher.init(Cipher.DECRYPT_MODE, clave);
+        byte[] datosBase64Bytes = cipher.doFinal(cifrado);
+
+        // 2 - Convertir los bytes descifrados a String
+        String datosBase64 = new String(datosBase64Bytes);
+
+        return datosBase64; // este String contiene Base64 del objeto original
+    }
+
 
     public static void comprar(PrivateKey privada) {
         try {
@@ -150,6 +169,7 @@ public class Cliente {
             out.flush();
 
             // Firmar billete
+            // Convertir el objeto 'seleccionado' (Billete) a un array de bytes
             ByteArrayOutputStream bos = new ByteArrayOutputStream();
             ObjectOutputStream oos = new ObjectOutputStream(bos);
             oos.writeObject(seleccionado);
@@ -161,16 +181,16 @@ public class Cliente {
             sig.update(mensajeBytes);
             byte[] firma = sig.sign();
 
-                out.writeObject(seleccionado);
-                out.writeObject(firma);
-                out.flush();
-                System.out.println("Billete y firma enviados al servidor");
+            out.writeObject(seleccionado);
+            out.writeObject(firma);
+            out.flush();
+            System.out.println("Billete y firma enviados al servidor");
 
-                Object resp = in.readObject();
-                 if ("OTRO_CLIENTE_ESPERANDO".equals(resp)) {
-                    System.out.println("Otro cliente está comprando este billete. Esperando turno...");
-                    System.out.println(opc);
-                }
+            Object resp = in.readObject();
+            if ("OTRO_CLIENTE_ESPERANDO".equals(resp)) {
+                System.out.println("Otro cliente está comprando este billete. Esperando turno...");
+                System.out.println(opc);
+            }
 
             Transaccion transaccion = (Transaccion) in.readObject();
             System.out.println("Resultado de la compra: " + transaccion);
@@ -188,34 +208,48 @@ public class Cliente {
 
             Scanner sc = new Scanner(System.in);
             System.out.println("Registrando usuario...");
-            System.out.println("Nombre");
+
+            System.out.print("Nombre: ");
             String nombre = sc.nextLine();
-            System.out.println("Apellido");
+            if (!validarPatron(Pattern.compile("^[A-Za-zÁÉÍÓÚáéíóúñÑ ]+$"), nombre)) {
+                errores.add("El nombre no puede contener números ni caracteres especiales.");
+            }
+
+            System.out.print("Apellido: ");
             String apellido = sc.nextLine();
-            System.out.println("edad");
-            int edad = 0;
+            if (!validarPatron(Pattern.compile("^[A-Za-zÁÉÍÓÚáéíóúñÑ ]+$"), apellido)) {
+                errores.add("El apellido no puede contener números ni caracteres especiales.");
+            }
+
+            // --- Edad ---
+            System.out.print("Edad: ");
+            int edad = -1;
             if (!sc.hasNextInt()) {
-                errores.add("Edad incorrecta, ingrese una edad valida");
+                errores.add("Edad incorrecta, debe ser un número entero.");
+                sc.nextLine();
             } else {
                 edad = sc.nextInt();
+                sc.nextLine();
 
+                if (edad < 1 || edad > 120) {
+                    errores.add("La edad debe estar entre 1 y 120 años.");
+                }
             }
-            sc.nextLine();
-            System.out.println("Email");
+            System.out.print("Email: ");
             String email = sc.nextLine();
             Pattern pat = Pattern.compile(".+@.+\\..+");
             if (!validarPatron(pat, email)) {
                 errores.add("email incorrecto, ingrese un email valido");
             }
 
-            System.out.println("Usuario:");
+            System.out.print("Usuario: ");
             String usuario = sc.nextLine();
             if (!validarPatron(Pattern.compile("^[a-zA-Z0-9]{6}"), usuario)) {
                 errores.add("usuario incorrecto, minimo 6 caracteres");
 
             }
 
-            System.out.println("Contraseña:");
+            System.out.print("Contraseña: ");
             String passwd = sc.nextLine();
             if (!validarPatron(Pattern.compile("[a-zA-Z0-9]{8,}"), passwd)) {
                 errores.add("Contraseña incorrecta, minimo 8 caracteres");
@@ -244,9 +278,8 @@ public class Cliente {
                 String respuesta = (String) in.readObject();
                 if(respuesta.equals("200")){
                     System.out.println("Usuario registrado correctamente: " + u);
-                }else{
+                }else if(respuesta.equals("409")){
                     System.err.println("Error resgistrando usuario.- Usuario ya existente");
-
                 }
 
             }
@@ -268,11 +301,11 @@ public class Cliente {
     public static void login(){
         try {
             Scanner sc = new Scanner(System.in);
-        System.out.println("Iniciando login...");
-        System.out.println("Usuario:");
-        String usuario = sc.nextLine();
-        System.out.println("Contraseña:");
-        String passwd = sc.nextLine();
+            System.out.println("Iniciando login...");
+            System.out.println("Usuario:");
+            String usuario = sc.nextLine();
+            System.out.println("Contraseña:");
+            String passwd = sc.nextLine();
 
             //cifrar usuario con la clave publica del servidor
             Cipher cipher = Cipher.getInstance("RSA");
@@ -293,11 +326,11 @@ public class Cliente {
             if(respuesta.equals("200")){
                 System.out.println("Login exitoso");
                 logueado = true;
-            }else if(respuesta.equals("400")){
+            }else if(respuesta.equals("404")){
                 System.err.println("Usuario no existente");
                 logueado = false;
             }
-            else{
+            else if(respuesta.equals("401")){
                 System.err.println("Error, login incorrecto");
                 logueado = false;
             }
